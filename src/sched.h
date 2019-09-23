@@ -2,6 +2,7 @@
 #define __COROUTINE_SCHED_H_H_H__
 
 #include <ucontext.h>
+#include <stddef.h>
 
 #include "common.h"
 
@@ -14,8 +15,6 @@
 #define _COROUTINE_STATE_COND_WAITING   (0x6)
 #define _COROUTINE_STATE_JOIN_WAITING   (0x7)
 
-#define _COROUTINE_FLAG_JOINABLE        (0x0)
-#define _COROUTINE_FLAG_NONJOINABLE     (0x1)
 #define _COROUTINE_FLAG_JOINABLE_IDX    (0x0)
 
 #define _DEFAULT_STACK_SIZE         (1048576)

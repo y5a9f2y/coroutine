@@ -13,22 +13,25 @@
 #include <unistd.h>
 
 #include "ds.h"
+#include "socket.h"
 #include "sched.h"
+#include "event.h"
 
 static size_t _sys_stack_size = 0;
 static size_t _sys_page_size = 0;
 
 _co_sched_t *_co_scheduler = NULL;
-_co_list_t *_co_stack_pool = NULL;
-_co_list_t *_co_thread_pool = NULL;
 _co_thread_t *_co_current = NULL;
+_co_list_t *_co_socket_list = NULL;
 
+static _co_list_t *_co_stack_pool = NULL;
+static _co_list_t *_co_thread_pool = NULL;
 
 // static declaration of the functions
 static _co_stack_t *_co_stack_create();
 static void _co_stack_recycle(_co_stack_t *);
+static void _co_stack_destroy(_co_stack_t *);
 static void _co_switch_save_stack();
-static void _co_switch();
 static void _co_schedule();
 static void _co_schedule_main();
 static void _coroutine_recycle(_co_thread_t *);
@@ -52,18 +55,23 @@ int co_framework_init() {
         }
     }
 
-    if(!(_co_stack_pool = _co_list_create())) {
-        return ENOMEM;
+    if(_co_eventsys_init() < 0) {
+        return errno;
     }
 
-    if(!(_co_thread_pool = _co_list_create())) {
+    if(!(_co_stack_pool = _co_list_create()) ||
+        !(_co_thread_pool = _co_list_create()) ||
+        !(_co_socket_list = _co_list_create())) {
         _co_list_destroy(_co_stack_pool);
+        _co_list_destroy(_co_thread_pool);
+        _co_list_destroy(_co_socket_list);
         return ENOMEM;
     }
 
     if(!(_co_scheduler = (_co_sched_t *)malloc(sizeof(_co_sched_t)))) {
         _co_list_destroy(_co_stack_pool);
         _co_list_destroy(_co_thread_pool);
+        _co_list_destroy(_co_socket_list);
         return ENOMEM;
     }
     memset(_co_scheduler, 0, sizeof(_co_scheduler));
@@ -77,6 +85,7 @@ int co_framework_init() {
         !(_co_scheduler->stk = _co_stack_create())) {
         _co_list_destroy(_co_stack_pool);
         _co_list_destroy(_co_thread_pool);
+        _co_list_destroy(_co_socket_list);
         co_framework_destroy();
         return ENOMEM;
     }
@@ -86,6 +95,12 @@ int co_framework_init() {
 }
 
 void co_framework_destroy() {
+
+    _co_list_t *next = NULL;
+    _co_stack_t *stk = NULL;
+    _co_thread_t *co = NULL;
+    _co_socket_t *sock = NULL;
+
     _co_list_destroy(_co_scheduler->readyq);
     _co_list_destroy(_co_scheduler->sleepq);
     _co_list_destroy(_co_scheduler->iowaitq);
@@ -94,6 +109,23 @@ void co_framework_destroy() {
     _co_list_destroy(_co_scheduler->joinq);
     _co_stack_recycle(_co_scheduler->stk);
     free(_co_scheduler);
+    while(!_co_list_empty(_co_thread_pool)) {
+        next = _co_list_delete(_co_thread_pool->next);
+        co = _CO_THREAD_LINK_PTR(next);
+        _coroutine_destroy(co);
+    }
+    while(!_co_list_empty(_co_stack_pool)) {
+        next = _co_list_delete(_co_stack_pool->next);
+        stk = _CO_STACK_PTR(next);
+        _co_stack_destroy(stk);
+    }
+    while(!_co_list_empty(_co_socket_list)) {
+        next = _co_list_delete(_co_socket_list->next);
+        sock = _CO_SOCKET_PTR(next);
+        co_close(sock);
+    }
+    _co_eventsys_destroy();
+
 }
 
 
@@ -124,7 +156,7 @@ _co_thread_t *coroutine_create(_co_fp_t fn, void *args) {
     alloc->fn = fn;
     alloc->args = args;
     alloc->state = _COROUTINE_STATE_READY;
-    alloc->flag = _COROUTINE_FLAG_JOINABLE;
+    alloc->flag = COROUTINE_FLAG_JOINABLE;
     alloc->join = NULL;
     alloc->join_cnt = 0;
 
@@ -158,7 +190,7 @@ void coroutine_exit(void *ret) {
     }
 
     // handle the state of the coroutine
-    if(coroutine_getdetachstate(_co_current) == _COROUTINE_FLAG_JOINABLE) {
+    if(coroutine_getdetachstate(_co_current) == COROUTINE_FLAG_JOINABLE) {
 
         _co_current->ret = ret;
         _co_current->state = _COROUTINE_STATE_ZOMBIE;
@@ -166,6 +198,7 @@ void coroutine_exit(void *ret) {
 
         // signal the coroutine which waits for the current coroutine
         if(_co_current->join) {
+            _co_current->join->state = _COROUTINE_STATE_READY;
             _co_list_delete(&_co_current->join->link);
             _co_list_insert(_co_scheduler->readyq, &_co_current->join->link);
         }
@@ -181,9 +214,9 @@ void coroutine_exit(void *ret) {
 
 void coroutine_setdetachstate(_co_thread_t *thread, int detachstate) {
     switch(detachstate) {
-        case _COROUTINE_FLAG_JOINABLE:
+        case COROUTINE_FLAG_JOINABLE:
             thread->flag &= (~(1 << _COROUTINE_FLAG_JOINABLE_IDX));
-        case _COROUTINE_FLAG_NONJOINABLE:
+        case COROUTINE_FLAG_NONJOINABLE:
             thread->flag |= (1 << _COROUTINE_FLAG_JOINABLE_IDX);
             break;
     }
@@ -191,14 +224,14 @@ void coroutine_setdetachstate(_co_thread_t *thread, int detachstate) {
 
 int coroutine_getdetachstate(_co_thread_t *thread) {
     if(thread->flag & (1 << _COROUTINE_FLAG_JOINABLE_IDX)) {
-        return _COROUTINE_FLAG_NONJOINABLE;
+        return COROUTINE_FLAG_NONJOINABLE;
     }
-    return _COROUTINE_FLAG_JOINABLE;
+    return COROUTINE_FLAG_JOINABLE;
 }
 
 int coroutine_join(_co_thread_t *thread) {
 
-    if(coroutine_getdetachstate(thread) == _COROUTINE_FLAG_NONJOINABLE) {
+    if(coroutine_getdetachstate(thread) == COROUTINE_FLAG_NONJOINABLE) {
         return EINVAL;
     }
 
@@ -264,7 +297,7 @@ static void _co_switch_save_stack() {
 
 }
 
-static void _co_switch() {
+void _co_switch() {
   
     if(_co_current) {
         // if the current coroutine is not the primary coroutine then save the context here
@@ -283,7 +316,7 @@ static void _co_schedule_main() {
     _co_current->ret = _co_current->fn(_co_current->args);
 
     // handle the state of the coroutine
-    if(coroutine_getdetachstate(_co_current) == _COROUTINE_FLAG_JOINABLE) {
+    if(coroutine_getdetachstate(_co_current) == COROUTINE_FLAG_JOINABLE) {
 
         _co_current->state = _COROUTINE_STATE_ZOMBIE;
         _co_list_insert(_co_scheduler->zombieq, &_co_current->link);
@@ -308,33 +341,41 @@ static void _co_schedule() {
     _co_list_t *link;
     _co_thread_t *next;
 
-    while(!_co_list_empty(_co_scheduler->readyq)) {
+    while(1) {
+
+        while(!_co_list_empty(_co_scheduler->readyq)) {
 
 
-        // get the ready coroutine
-        link = _co_list_delete(_co_scheduler->readyq->next);
-        next = _CO_THREAD_LINK_PTR(link);
+            // get the ready coroutine
+            link = _co_list_delete(_co_scheduler->readyq->next);
+            next = _CO_THREAD_LINK_PTR(link);
 
-        // set the current coroutine
-        _co_current = next;
+            // set the current coroutine
+            _co_current = next;
 
-        if(!_co_current->stk->size) {
-            getcontext(&_co_current->ctx);
-            _co_current->ctx.uc_stack.ss_sp = (void *)(_co_scheduler->stk->start);
-            _co_current->ctx.uc_stack.ss_size = _sys_stack_size;
-            _co_current->ctx.uc_link = &_co_scheduler->ctx;
-            makecontext(&_co_current->ctx, _co_schedule_main, 0);
-        } else {
-            memcpy((void *)(_co_scheduler->stk->end - _co_current->stk->size),
-                    (const void *)(_co_current->stk->end - _co_current->stk->size),
-                    (size_t)(_co_current->stk->size));
+            if(!_co_current->stk->size) {
+                getcontext(&_co_current->ctx);
+                _co_current->ctx.uc_stack.ss_sp = (void *)(_co_scheduler->stk->start);
+                _co_current->ctx.uc_stack.ss_size = _sys_stack_size;
+                _co_current->ctx.uc_link = &_co_scheduler->ctx;
+                makecontext(&_co_current->ctx, _co_schedule_main, 0);
+            } else {
+                memcpy((void *)(_co_scheduler->stk->end - _co_current->stk->size),
+                        (const void *)(_co_current->stk->end - _co_current->stk->size),
+                        (size_t)(_co_current->stk->size));
+            }
+            _co_current->state = _COROUTINE_STATE_RUNNING;
+            swapcontext(&_co_scheduler->ctx, &_co_current->ctx);
+
         }
-        _co_current->state = _COROUTINE_STATE_RUNNING;
-        swapcontext(&_co_scheduler->ctx, &_co_current->ctx);
+
+        _co_eventsys_dispatch();
+
+        if(_co_list_empty(_co_scheduler->readyq)) {
+            break;
+        }
 
     }
-
-    // TODO add the event poll here
     
     _co_current = NULL;
 
@@ -392,6 +433,13 @@ static _co_stack_t *_co_stack_create() {
 
     return alloc;
 
+}
+
+static void _co_stack_destroy(_co_stack_t *stk) {
+    if(stk) {
+        munmap((void *)stk->rstart, _sys_stack_size + 2 * _sys_page_size); 
+        free(stk);
+    }
 }
 
 static void _co_stack_recycle(_co_stack_t *stk) {
