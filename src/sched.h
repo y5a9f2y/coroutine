@@ -5,6 +5,7 @@
 #include <stddef.h>
 
 #include "common.h"
+#include "ds.h"
 
 #define _COROUTINE_STATE_READY          (0x0)
 #define _COROUTINE_STATE_RUNNING        (0x1)

@@ -33,13 +33,11 @@ void _co_list_destroy(_co_list_t *);
 void _co_list_insert(_co_list_t *, _co_list_t *);
 _co_list_t *_co_list_delete(_co_list_t *);
 int _co_list_empty(_co_list_t *);
-
 void _co_switch();
 
 // the variable declaration
-
+    
 extern _co_list_t   *_co_socket_list;
 extern _co_thread_t *_co_current;
 extern _co_sched_t  *_co_scheduler;
-
 #endif
