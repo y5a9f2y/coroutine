@@ -17,6 +17,7 @@ int _co_eventsys_init() {
     if((_co_eventsys_fd = epoll_create(_CO_EVENTSYS_SIZE_HINT)) < 0) {
         return -1;
     }
+    return 0;
 }
 
 int _co_eventsys_dispatch() {
@@ -27,6 +28,7 @@ int _co_eventsys_dispatch() {
     struct epoll_event ev;
     struct epoll_event polling[_CO_EVENTSYS_BUFFER];
     int idx = 0;
+    int pflag = 0;
 
     if(_co_list_empty(_co_socket_list)) {
         errno = EINVAL;
@@ -36,6 +38,7 @@ int _co_eventsys_dispatch() {
     for(p = _co_socket_list->next; p != _co_socket_list; p = p->next) {
         cosockfd = _CO_SOCKET_PTR(p);
         if(_co_socket_polling_get(cosockfd)) {
+            pflag = 1;
             continue;
         }
         ev.events = 0;
@@ -56,9 +59,10 @@ int _co_eventsys_dispatch() {
             return -1;
         }
         _co_socket_polling_set(cosockfd);
+        pflag = 1;
     }
 
-    while(1) {
+    while(1 && pflag) {
         if((nevents = epoll_wait(_co_eventsys_fd, polling, _CO_EVENTSYS_BUFFER, -1)) < 0) {
             switch(errno) {
                 case EINTR:

@@ -9,13 +9,14 @@
 #include "socket.h"
 #include "sched.h"
 
-static void _co_socket_destroy(_co_socket_t *);
+static void _co_socket_recyle(_co_socket_t *);
 static int _co_socket_flag_verify(int);
 
 _co_socket_t *co_socket(int domain, int type, int protocol) {
 
     int fd;
     _co_socket_t *alloc;
+    _co_list_t *next;
 
     if((fd = socket(domain, type, protocol)) < 0) {
         return NULL;
@@ -25,8 +26,13 @@ _co_socket_t *co_socket(int domain, int type, int protocol) {
         return NULL;
     }
 
-    if(!(alloc = (_co_socket_t *)malloc(sizeof(_co_socket_t)))) {
-        return NULL;
+    if(!_co_list_empty(_co_socket_pool)) {
+        next = _co_list_delete(_co_socket_pool->next);
+        alloc = _CO_SOCKET_PTR(next);
+    } else {
+        if(!(alloc = (_co_socket_t *)malloc(sizeof(_co_socket_t)))) {
+            return NULL;
+        }
     }
 
     alloc->fd = fd;
@@ -39,8 +45,17 @@ _co_socket_t *co_socket(int domain, int type, int protocol) {
 
 }
 
-static void _co_socket_destroy(_co_socket_t *cosockfd) {
-    free(cosockfd);
+void _co_socket_destroy(_co_socket_t *cosockfd) {
+    if(cosockfd) {
+        free(cosockfd);
+    }
+}
+
+static void _co_socket_recycle(_co_socket_t *cosockfd) {
+    if(cosockfd) {
+        _co_list_delete(&cosockfd->link);
+        _co_list_insert(_co_socket_pool, &cosockfd->link);
+    }
 }
 
 void _co_socket_flag_set(_co_socket_t *cosockfd, int flag) {
@@ -53,6 +68,7 @@ int _co_socket_flag_get(_co_socket_t *cosockfd, int flag) {
     if(_co_socket_flag_verify(flag)) {
         return cosockfd->flag & (1 << flag);
     }
+    return 0;
 }
 
 void _co_socket_flag_unset(_co_socket_t *cosockfd, int flag) {
@@ -93,7 +109,7 @@ int co_listen(_co_socket_t *cosockfd, int backlog) {
 
 int co_close(_co_socket_t *cosockfd) {
     int fd = cosockfd->fd;
-    _co_socket_destroy(cosockfd);
+    _co_socket_recycle(cosockfd);
     return close(fd);
 }
 

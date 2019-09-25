@@ -17,6 +17,7 @@ test:
 	@ln -s $(shell pwd)/src utest/build/include/coroutine
 	@cd utest/build && cmake .. && make
 	@./utest/build/bin/coroutine_test
+	@cd utest && sh ./coverage.sh
 
 clean:
 	@if [ -d "build" ]; then rm -rf build; fi
