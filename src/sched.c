@@ -16,6 +16,7 @@
 #include "socket.h"
 #include "sched.h"
 #include "event.h"
+#include "sync.h"
 
 static size_t _sys_stack_size = 0;
 static size_t _sys_page_size = 0;
@@ -26,6 +27,9 @@ _co_list_t *_co_socket_list = NULL;
 _co_list_t *_co_socket_pool = NULL;
 _co_list_t *_co_stack_pool = NULL;
 _co_list_t *_co_thread_pool = NULL;
+_co_list_t *_co_mutex_pool = NULL;
+_co_list_t *_co_cond_pool = NULL;
+_co_time_heap_t *_co_timeout_heap = NULL;
 
 // static declaration of the functions
 static _co_stack_t *_co_stack_create();
@@ -36,6 +40,11 @@ static void _co_schedule();
 static void _co_schedule_main();
 static void _coroutine_recycle(_co_thread_t *);
 static void _coroutine_destroy(_co_thread_t *);
+static void _co_list_thread_destroy(_co_list_t *, int);
+static void _co_list_cond_destroy(_co_list_t *);
+static void _co_list_mutex_destroy(_co_list_t *);
+static void _co_list_stack_destroy(_co_list_t *);
+static void _co_list_socket_teardown(_co_list_t *, int);
 
 static void _co_framework_destroy_pool();
 
@@ -43,6 +52,10 @@ static void _co_framework_destroy_pool();
 int co_framework_init() {
 
     struct rlimit rlim;
+
+    if(_co_scheduler) {
+        return 0;
+    }
 
     if(getrlimit(RLIMIT_STACK, &rlim) < 0) {
         return errno;
@@ -63,7 +76,9 @@ int co_framework_init() {
     if(!(_co_stack_pool = _co_list_create()) ||
         !(_co_thread_pool = _co_list_create()) ||
         !(_co_socket_list = _co_list_create()) ||
-        !(_co_socket_pool = _co_list_create())) {
+        !(_co_socket_pool = _co_list_create()) || 
+        !(_co_mutex_pool = _co_list_create()) ||
+        !(_co_cond_pool = _co_list_create())) {
         _co_framework_destroy_pool();
         return ENOMEM;
     }
@@ -77,7 +92,8 @@ int co_framework_init() {
     if(!(_co_scheduler->readyq = _co_list_create()) ||
         !(_co_scheduler->sleepq = _co_list_create()) ||
         !(_co_scheduler->iowaitq = _co_list_create()) ||
-        !(_co_scheduler->lockwaitq = _co_list_create()) || 
+        !(_co_scheduler->mutexq = _co_list_create()) || 
+        !(_co_scheduler->condq = _co_list_create()) || 
         !(_co_scheduler->zombieq = _co_list_create()) ||
         !(_co_scheduler->joinq = _co_list_create()) ||
         !(_co_scheduler->stk = _co_stack_create())) {
@@ -92,61 +108,152 @@ int co_framework_init() {
 
 static void _co_framework_destroy_pool() {
 
-    _co_list_t *next = NULL;
-    _co_stack_t *stk = NULL;
-    _co_thread_t *co = NULL;
-    _co_socket_t *sock = NULL;
+    _co_list_mutex_destroy(_co_mutex_pool);
+    _co_list_cond_destroy(_co_cond_pool);
+    _co_list_thread_destroy(_co_thread_pool, 1);
+    _co_list_stack_destroy(_co_stack_pool);
+    _co_list_socket_teardown(_co_socket_list, 1);
+    _co_list_socket_teardown(_co_socket_pool, 0);
 
-    if(_co_thread_pool) {
-        while(!_co_list_empty(_co_thread_pool)) {
-            next = _co_list_delete(_co_thread_pool->next);
-            co = _CO_THREAD_LINK_PTR(next);
-            _coroutine_destroy(co);
-        }
+}
+
+static void _co_list_socket_teardown(_co_list_t *l, int flag) {
+
+    _co_list_t *next;
+    _co_socket_t *sock;
+
+    if(!l) {
+        return;
     }
 
-    if(_co_stack_pool) {
-        while(!_co_list_empty(_co_stack_pool)) {
-            next = _co_list_delete(_co_stack_pool->next);
-            stk = _CO_STACK_PTR(next);
-            _co_stack_destroy(stk);
-        }
-    }
-
-    if(_co_socket_list) {
-        while(!_co_list_empty(_co_socket_list)) {
-            next = _co_list_delete(_co_socket_list->next);
-            sock = _CO_SOCKET_PTR(next);
+    while(!_co_list_empty(l)) {
+        next = _co_list_delete(l->next);
+        sock = _CO_SOCKET_PTR(next);
+        if(flag) {
             co_close(sock);
-        }
-    }
-
-    if(_co_socket_pool) {
-        while(!_co_list_empty(_co_socket_pool)) {
-            next = _co_list_delete(_co_socket_pool->next);
-            sock = _CO_SOCKET_PTR(next);
+        } else {
             _co_socket_destroy(sock);
         }
     }
 
-    _co_list_destroy(_co_thread_pool);
-    _co_list_destroy(_co_stack_pool);
-    _co_list_destroy(_co_socket_list);
-    _co_list_destroy(_co_socket_pool);
+    _co_list_destroy(l);
+
 }
 
-void co_framework_destroy() {
+static void _co_list_thread_destroy(_co_list_t *l, int flag) {
 
-    _co_list_destroy(_co_scheduler->readyq);
-    _co_list_destroy(_co_scheduler->sleepq);
-    _co_list_destroy(_co_scheduler->iowaitq);
-    _co_list_destroy(_co_scheduler->lockwaitq);
-    _co_list_destroy(_co_scheduler->zombieq);
-    _co_list_destroy(_co_scheduler->joinq);
-    _co_stack_recycle(_co_scheduler->stk);
+    _co_list_t *next;
+    _co_thread_t *co;
+
+    if(!l) {
+        return;
+    }
+
+    while(!_co_list_empty(l)) {
+        next = _co_list_delete(l->next);
+        co = _CO_THREAD_LINK_PTR(next);
+        _coroutine_destroy(co);
+    }
+
+    if(flag) {
+        _co_list_destroy(l);
+    }
+
+}
+
+static void _co_list_mutex_destroy(_co_list_t *l) {
+
+    _co_list_t *next;
+    _co_mutex_t *mu;
+
+    if(!l) {
+        return;
+    }
+
+    while(!_co_list_empty(l)) {
+        next = _co_list_delete(l->next);
+        mu = _CO_MUTEX_PTR(next);
+        _co_list_thread_destroy(&mu->wait, 0);
+        _co_mutex_destroy(mu);
+    }
+
+    _co_list_destroy(l);
+
+}
+
+static void _co_list_cond_destroy(_co_list_t *l) {
+
+    _co_list_t *next;
+    _co_cond_t *cond;
+
+    if(!l) {
+        return;
+    }
+
+    while(!_co_list_empty(l)) {
+        next = _co_list_delete(l->next);
+        cond = _CO_COND_PTR(next);
+        _co_list_thread_destroy(&cond->wait, 0);
+        _co_cond_destroy(cond);
+    }
+
+    _co_list_destroy(l);
+
+}
+
+static void _co_list_stack_destroy(_co_list_t *l) {
+
+    _co_list_t *next;
+    _co_stack_t *stk;
+
+    if(!l) {
+        return;
+    }
+
+    while(!_co_list_empty(l)) {
+        next = _co_list_delete(l->next);
+        stk = _CO_STACK_PTR(next);
+        _co_stack_destroy(stk);
+    }
+
+    _co_list_destroy(l);
+
+}
+
+
+int co_framework_destroy() {
+
+    if(_co_current) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if(!_co_scheduler) {
+        return 0;
+    }
+
+    _co_list_thread_destroy(_co_scheduler->readyq, 1);
+    _co_list_thread_destroy(_co_scheduler->sleepq, 1);
+    _co_list_thread_destroy(_co_scheduler->iowaitq, 1);
+    _co_list_thread_destroy(_co_scheduler->zombieq, 1);
+    _co_list_thread_destroy(_co_scheduler->joinq, 1);
+    _co_stack_destroy(_co_scheduler->stk);
+    _co_list_mutex_destroy(_co_scheduler->mutexq);
+    _co_list_cond_destroy(_co_scheduler->condq);
     free(_co_scheduler);
     _co_eventsys_destroy();
     _co_framework_destroy_pool();
+
+    _co_scheduler = NULL;
+    _co_current = NULL;
+    _co_socket_list = NULL;
+    _co_socket_pool = NULL;
+    _co_stack_pool = NULL;
+    _co_thread_pool = NULL;
+    _co_mutex_pool = NULL;
+    _co_cond_pool = NULL;
+
+    return 0;
 
 }
 
@@ -251,7 +358,7 @@ int coroutine_getdetachstate(_co_thread_t *thread) {
     return COROUTINE_FLAG_JOINABLE;
 }
 
-int coroutine_join(_co_thread_t *thread) {
+int coroutine_join(_co_thread_t *thread, void **value_ptr) {
 
     if(coroutine_getdetachstate(thread) == COROUTINE_FLAG_NONJOINABLE) {
         return EINVAL;
@@ -270,6 +377,9 @@ int coroutine_join(_co_thread_t *thread) {
     }
 
     if(thread->state == _COROUTINE_STATE_ZOMBIE) {
+        if(value_ptr) {
+            *value_ptr = thread->ret;
+        }
         _co_list_delete(&thread->link);
         _coroutine_recycle(thread);
         return 0;
@@ -297,6 +407,9 @@ int coroutine_join(_co_thread_t *thread) {
 
                 break;
             case _COROUTINE_STATE_ZOMBIE:
+                if(value_ptr) {
+                    *value_ptr = thread->ret;
+                }
                 _co_list_delete(&thread->link);
                 _coroutine_recycle(thread);
                 return 0;

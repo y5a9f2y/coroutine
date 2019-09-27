@@ -14,7 +14,9 @@ test:
 	@mkdir -p third/googletest/build
 	@cd third/googletest/build && cmake .. && make
 	@mkdir -p utest/build/include
-	@ln -s $(shell pwd)/src utest/build/include/coroutine
+	@if [ ! -d "$(shell pwd)/utest/build/include/coroutine" ]; then \
+		ln -s $(shell pwd)/src $(shell pwd)/utest/build/include/coroutine; \
+	 fi
 	@cd utest/build && cmake .. && make
 	@./utest/build/bin/coroutine_test
 	@cd utest && sh ./coverage.sh

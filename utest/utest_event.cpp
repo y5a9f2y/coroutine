@@ -22,6 +22,6 @@ TEST(EventTest, InitAndDispatch) {
     ASSERT_EQ(_co_eventsys_dispatch(), 0);
     _co_eventsys_destroy();
 
-    co_framework_destroy();
+    ASSERT_FALSE(co_framework_destroy());
 
 }

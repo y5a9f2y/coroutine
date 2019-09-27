@@ -31,8 +31,10 @@ struct _co_sched {
     _co_list_t      *sleepq;
     // io-waiting queue
     _co_list_t      *iowaitq;
-    // lock-waiting queue
-    _co_list_t      *lockwaitq;
+    // mutex-waiting queue
+    _co_list_t      *mutexq;
+    // cond-waiting queue
+    _co_list_t      *condq;
     // zombie queue
     _co_list_t      *zombieq;
     // join queue

@@ -8,4 +8,14 @@ struct _co_list {
     _co_list_t *prev;
 };
 
+struct _co_time_heap_node {
+    _co_time_t timeout;
+};
+
+struct _co_time_heap {
+    size_t  cap;
+    size_t  size;
+    _co_time_heap_node_t *heap;
+};
+
 #endif

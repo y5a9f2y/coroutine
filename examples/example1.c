@@ -8,6 +8,7 @@
 void *print(void *arg) {
     int p = *(int *)arg;
     fprintf(stdout, "the argument of print is %d\n", p);
+    return NULL;
 }
 
 int main(int argc, char *argv[]) {
@@ -34,8 +35,8 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
 
-    coroutine_join(c1);
-    coroutine_join(c2);
+    coroutine_join(c1, NULL);
+    coroutine_join(c2, NULL);
 
     co_framework_destroy();
 

@@ -31,7 +31,7 @@ TEST(SocketTest, Life) {
     _co_list_delete(&nfd->link);
     _co_socket_destroy(nfd);
 
-    co_framework_destroy();
+    ASSERT_FALSE(co_framework_destroy());
 
 }
 
@@ -57,6 +57,6 @@ TEST(SocketTest, Property) {
 
     co_close(fd);
 
-    co_framework_destroy();
+    ASSERT_FALSE(co_framework_destroy());
 
 }

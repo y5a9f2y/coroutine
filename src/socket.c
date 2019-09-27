@@ -113,6 +113,10 @@ int co_close(_co_socket_t *cosockfd) {
     return close(fd);
 }
 
+int co_socket_get_fd(_co_socket_t *cosockfd) {
+    return cosockfd->fd;
+}
+
 _co_socket_t *co_accept(_co_socket_t *cosockfd, struct sockaddr *addr, socklen_t *addrlen) {
 
     int err;
@@ -157,14 +161,23 @@ _co_socket_t *co_accept(_co_socket_t *cosockfd, struct sockaddr *addr, socklen_t
 
 }
 
-ssize_t co_read(co_socket_t *cosockfd, void *buf, size_t count) {
+ssize_t co_read(_co_socket_t *cosockfd, void *buf, size_t len) {
+    return co_recv(cosockfd, buf, len, 0);
+}
+
+ssize_t co_recv(_co_socket_t *cosockfd, void *buf, size_t len, int flags) {
+    return co_recvfrom(cosockfd, buf, len, flags, NULL, NULL);
+}
+
+ssize_t co_recvfrom(_co_socket_t *cosockfd, void *buf, size_t len, int flags,
+    struct sockaddr *addr, socklen_t *addrlen) {
 
     ssize_t n;
 
     cosockfd->co = _co_current;
 
     while(1) {
-        if((n = read(cosockfd->fd, buf, count)) < 0) {
+        if((n = recvfrom(cosockfd->fd, buf, len, flags, addr, addrlen)) < 0) {
             if(errno == EAGAIN || errno == EWOULDBLOCK) {
                 _co_socket_flag_set(cosockfd, _COSOCKET_READ_INDEX);
                 // trigger to switch the context
@@ -188,14 +201,23 @@ ssize_t co_read(co_socket_t *cosockfd, void *buf, size_t count) {
 
 }
 
-ssize_t co_write(co_socket_t *cosockfd, const void *buf, size_t count) {
+ssize_t co_write(_co_socket_t *cosockfd, const void *buf, size_t len) {
+    return co_send(cosockfd, buf, len, 0);
+}
+
+ssize_t co_send(_co_socket_t *cosockfd, const void *buf, size_t len, int flags) {
+    return co_sendto(cosockfd, buf, len, flags, NULL, 0);
+}
+
+ssize_t co_sendto(_co_socket_t *cosockfd, const void *buf, size_t len, int flags,
+    const struct sockaddr *addr, socklen_t addrlen) {
 
     ssize_t n;
 
     cosockfd->co = _co_current;
 
     while(1) {
-        if((n = write(cosockfd->fd, buf, count)) < 0) {
+        if((n = sendto(cosockfd->fd, buf, len, flags, addr, addrlen)) < 0) {
             if(errno == EAGAIN || errno == EWOULDBLOCK) {
                 _co_socket_flag_set(cosockfd, _COSOCKET_WRITE_INDEX);
                 // trigger to switch the context
