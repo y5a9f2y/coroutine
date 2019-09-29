@@ -3,4 +3,5 @@
 
 #include "common.h"
 
+_co_time_t _co_get_current_time();
 #endif

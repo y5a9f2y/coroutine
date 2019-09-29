@@ -9,6 +9,7 @@ typedef struct _co_thread   co_thread_t;
 typedef struct _co_socket   co_socket_t;
 typedef struct _co_mutex    co_mutex_t;
 typedef struct _co_cond     co_cond_t;
+typedef long long           co_time_t;
 
 extern int co_framework_init();
 extern int co_framework_destroy();
@@ -44,6 +45,8 @@ extern int co_cond_destroy(co_cond_t *);
 extern void co_cond_wait(co_cond_t *);
 extern void co_cond_signal(co_cond_t *);
 extern void co_cond_broadcast(co_cond_t *);
+
+extern int co_usleep(co_time_t);
 
 #define COROUTINE_FLAG_JOINABLE        (0x0)
 #define COROUTINE_FLAG_NONJOINABLE     (0x1)

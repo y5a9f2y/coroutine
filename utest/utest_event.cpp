@@ -13,7 +13,7 @@ TEST(EventTest, InitAndDispatch) {
     ASSERT_FALSE(co_framework_init());
 
     ASSERT_FALSE(_co_eventsys_init());
-    ASSERT_EQ(_co_eventsys_dispatch(), -1);
+    ASSERT_EQ(_co_eventsys_dispatch(), 0);
     _co_eventsys_destroy();
 
     ASSERT_FALSE(_co_eventsys_init());

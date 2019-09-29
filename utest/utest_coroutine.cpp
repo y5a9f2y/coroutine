@@ -21,7 +21,6 @@ TEST(CoroutineTest, LiveAndCall) {
     co_thread_t *co = coroutine_create(_coroutine_test_fn1, &args);
     ASSERT_FALSE(!co);
     ASSERT_TRUE(_CO_THREAD_LINK_PTR(&co->link) == co);
-    ASSERT_TRUE(_CO_THREAD_TLELINK_PTR(&co->tlelink) == co);
     ASSERT_TRUE(!_co_list_empty(_co_scheduler->readyq));
     ASSERT_TRUE(_co_scheduler->readyq->next == &co->link);
     ASSERT_TRUE(_co_list_empty(_co_thread_pool));

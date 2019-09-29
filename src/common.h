@@ -22,9 +22,6 @@ typedef struct _co_time_heap_node   _co_time_heap_node_t;
 #define _CO_THREAD_LINK_PTR(tk) \
     ((_co_thread_t *)((char *)(tk) - _CO_DS_OFFSET(_co_thread_t, link)))
 
-#define _CO_THREAD_TLELINK_PTR(tk) \
-    ((_co_thread_t *)((char *)(tk) - _CO_DS_OFFSET(_co_thread_t, tlelink)))
-
 #define _CO_SOCKET_PTR(sk) \
     ((_co_socket_t *)((char *)(sk) - _CO_DS_OFFSET(_co_socket_t, link)))
 
@@ -50,6 +47,15 @@ void _co_socket_destroy(_co_socket_t *);
 void _co_mutex_destroy(_co_mutex_t *);
 void _co_cond_destroy(_co_cond_t *);
 
+_co_time_heap_t *_co_time_heap_create();
+void _co_time_heap_destroy(_co_time_heap_t *);
+int _co_time_heap_expand(_co_time_heap_t *);
+int _co_time_heap_insert(_co_time_heap_t *, _co_time_t, _co_thread_t *);
+_co_time_heap_node_t _co_time_heap_delete(_co_time_heap_t *, _co_time_heap_node_t *);
+int _co_time_heap_empty(_co_time_heap_t *);
+_co_time_heap_node_t _co_time_heap_top(_co_time_heap_t *);
+
+
 // the variable declaration
     
 extern _co_list_t       *_co_socket_list;
@@ -60,5 +66,4 @@ extern _co_list_t       *_co_mutex_pool;
 extern _co_list_t       *_co_cond_pool;
 extern _co_thread_t     *_co_current;
 extern _co_sched_t      *_co_scheduler;
-extern _co_time_heap_t  *_co_timeout_heap;
 #endif

@@ -17,6 +17,7 @@
 #include "sched.h"
 #include "event.h"
 #include "sync.h"
+#include "time.h"
 
 static size_t _sys_stack_size = 0;
 static size_t _sys_page_size = 0;
@@ -29,7 +30,6 @@ _co_list_t *_co_stack_pool = NULL;
 _co_list_t *_co_thread_pool = NULL;
 _co_list_t *_co_mutex_pool = NULL;
 _co_list_t *_co_cond_pool = NULL;
-_co_time_heap_t *_co_timeout_heap = NULL;
 
 // static declaration of the functions
 static _co_stack_t *_co_stack_create();
@@ -41,6 +41,7 @@ static void _co_schedule_main();
 static void _coroutine_recycle(_co_thread_t *);
 static void _coroutine_destroy(_co_thread_t *);
 static void _co_list_thread_destroy(_co_list_t *, int);
+static void _co_heap_thread_destroy(_co_time_heap_t *);
 static void _co_list_cond_destroy(_co_list_t *);
 static void _co_list_mutex_destroy(_co_list_t *);
 static void _co_list_stack_destroy(_co_list_t *);
@@ -90,7 +91,7 @@ int co_framework_init() {
     memset(_co_scheduler, 0, sizeof(_co_scheduler));
 
     if(!(_co_scheduler->readyq = _co_list_create()) ||
-        !(_co_scheduler->sleepq = _co_list_create()) ||
+        !(_co_scheduler->sleepq = _co_time_heap_create()) ||
         !(_co_scheduler->iowaitq = _co_list_create()) ||
         !(_co_scheduler->mutexq = _co_list_create()) || 
         !(_co_scheduler->condq = _co_list_create()) || 
@@ -220,6 +221,20 @@ static void _co_list_stack_destroy(_co_list_t *l) {
 
 }
 
+static void _co_heap_thread_destroy(_co_time_heap_t *h) {
+
+    _co_time_heap_node_t node;
+
+    while(!_co_time_heap_empty(h)) {
+        node = _co_time_heap_delete(h, h->heap);
+        if(node.co) {
+            _coroutine_destroy(node.co);
+        }
+    }
+
+    _co_time_heap_destroy(h);
+
+}
 
 int co_framework_destroy() {
 
@@ -233,7 +248,7 @@ int co_framework_destroy() {
     }
 
     _co_list_thread_destroy(_co_scheduler->readyq, 1);
-    _co_list_thread_destroy(_co_scheduler->sleepq, 1);
+    _co_heap_thread_destroy(_co_scheduler->sleepq);
     _co_list_thread_destroy(_co_scheduler->iowaitq, 1);
     _co_list_thread_destroy(_co_scheduler->zombieq, 1);
     _co_list_thread_destroy(_co_scheduler->joinq, 1);
@@ -276,7 +291,6 @@ _co_thread_t *coroutine_create(_co_fp_t fn, void *args) {
     }
 
     _co_list_init(&alloc->link);
-    _co_list_init(&alloc->tlelink);
 
     alloc->fn = fn;
     alloc->args = args;
@@ -285,6 +299,7 @@ _co_thread_t *coroutine_create(_co_fp_t fn, void *args) {
     alloc->join = NULL;
     alloc->join_cnt = 0;
     alloc->stk = NULL;
+    alloc->tlelink = NULL;
 
     _co_list_insert(_co_scheduler->readyq, &alloc->link);
 
@@ -295,7 +310,6 @@ _co_thread_t *coroutine_create(_co_fp_t fn, void *args) {
 static void _coroutine_recycle(_co_thread_t *thread) {
 
     if(thread) {
-        _co_list_init(&thread->tlelink);
         _co_list_insert(_co_thread_pool, &thread->link);
         _co_stack_recycle(thread->stk);
         thread->stk = NULL;
@@ -483,8 +497,24 @@ static void _co_schedule() {
 
     _co_list_t *link;
     _co_thread_t *next;
+    _co_time_t now;
+    _co_time_heap_node_t node;
 
     while(1) {
+
+        while(!_co_time_heap_empty(_co_scheduler->sleepq)) {
+            now = _co_get_current_time();
+            node = _co_time_heap_top(_co_scheduler->sleepq);
+            if(now >= node.timeout) {
+                _co_time_heap_delete(_co_scheduler->sleepq, _co_scheduler->sleepq->heap);
+                if(node.co) {
+                    node.co->state = _COROUTINE_STATE_READY;
+                    _co_list_insert(_co_scheduler->readyq, &node.co->link);
+                }
+            } else {
+                break;
+            }
+        }
 
         while(!_co_list_empty(_co_scheduler->readyq)) {
 

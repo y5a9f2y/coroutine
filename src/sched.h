@@ -28,7 +28,7 @@ struct _co_sched {
     // idle queue
     _co_list_t      *readyq;
     // sleep queue
-    _co_list_t      *sleepq;
+    _co_time_heap_t *sleepq;
     // io-waiting queue
     _co_list_t      *iowaitq;
     // mutex-waiting queue
@@ -43,27 +43,27 @@ struct _co_sched {
 
 struct _co_thread {
     // the context of the scheduler
-    ucontext_t          ctx;
+    ucontext_t              ctx;
     // the queue of the coroutine(readyq/iowaitq/lockwaitq/zombieq/joinq)
-    _co_list_t          link;
-    // the queue of the coroutine(sleepq)
-    _co_list_t          tlelink;
+    _co_list_t              link;
+    // the heap of the timeout event
+    _co_time_heap_node_t    *tlelink;
     // the coroutine which wait the current coroutine
-    _co_thread_t        *join;
+    _co_thread_t            *join;
     // the number of coroutine waiting for the current coroutine
-    size_t              join_cnt;
+    size_t                  join_cnt;
     // start function
-    _co_fp_t            fn;
+    _co_fp_t                fn;
     // start function parameters
-    void                *args;
+    void                    *args;
     // return value
-    void                *ret;
+    void                    *ret;
     // coroutine stack
-    _co_stack_t         *stk;
+    _co_stack_t             *stk;
     // coroutine state
-    int                 state;
+    int                     state;
     // coroutine flag
-    int                 flag;
+    int                     flag;
 };
 
 struct _co_stack {

@@ -9,13 +9,14 @@ struct _co_list {
 };
 
 struct _co_time_heap_node {
-    _co_time_t timeout;
+    _co_time_t      timeout;
+    _co_thread_t    *co;
 };
 
 struct _co_time_heap {
-    size_t  cap;
-    size_t  size;
-    _co_time_heap_node_t *heap;
+    size_t                  cap;
+    size_t                  size;
+    _co_time_heap_node_t    *heap;
 };
 
 #endif

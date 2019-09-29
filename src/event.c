@@ -29,11 +29,8 @@ int _co_eventsys_dispatch() {
     struct epoll_event polling[_CO_EVENTSYS_BUFFER];
     int idx = 0;
     int pflag = 0;
-
-    if(_co_list_empty(_co_socket_list)) {
-        errno = EINVAL;
-        return -1;
-    }
+    _co_time_heap_node_t node;
+    _co_time_t now;
 
     for(p = _co_socket_list->next; p != _co_socket_list; p = p->next) {
         cosockfd = _CO_SOCKET_PTR(p);
@@ -62,30 +59,40 @@ int _co_eventsys_dispatch() {
         pflag = 1;
     }
 
-    while(1 && pflag) {
-        if((nevents = epoll_wait(_co_eventsys_fd, polling, _CO_EVENTSYS_BUFFER, -1)) < 0) {
-            switch(errno) {
-                case EINTR:
-                    continue;
-                default:
-                    return -1;
-            }
-        } else {
-            for(idx = 0; idx < nevents; ++idx) {
-                cosockfd = (_co_socket_t *)(polling[idx].data.ptr);
-                _co_socket_flag_unset(cosockfd, _COSOCKET_READ_INDEX);
-                _co_socket_flag_unset(cosockfd, _COSOCKET_WRITE_INDEX);
-                if(cosockfd->co) {
-                    cosockfd->co->state = _COROUTINE_STATE_READY;
-                    _co_list_delete(&cosockfd->co->link);
-                    _co_list_insert(_co_scheduler->readyq, &cosockfd->co->link);
+    if(pflag) {
+        while(1) {
+            if((nevents = epoll_wait(_co_eventsys_fd, polling, _CO_EVENTSYS_BUFFER, -1)) < 0) {
+                switch(errno) {
+                    case EINTR:
+                        continue;
+                    default:
+                        return -1;
                 }
-                if(epoll_ctl(_co_eventsys_fd, EPOLL_CTL_DEL, cosockfd->fd, NULL) < 0) {
-                    return -1;
+            } else {
+                for(idx = 0; idx < nevents; ++idx) {
+                    cosockfd = (_co_socket_t *)(polling[idx].data.ptr);
+                    _co_socket_flag_unset(cosockfd, _COSOCKET_READ_INDEX);
+                    _co_socket_flag_unset(cosockfd, _COSOCKET_WRITE_INDEX);
+                    if(cosockfd->co) {
+                        cosockfd->co->state = _COROUTINE_STATE_READY;
+                        _co_list_delete(&cosockfd->co->link);
+                        _co_list_insert(_co_scheduler->readyq, &cosockfd->co->link);
+                    }
+                    if(epoll_ctl(_co_eventsys_fd, EPOLL_CTL_DEL, cosockfd->fd, NULL) < 0) {
+                        return -1;
+                    }
+                    _co_socket_polling_unset(cosockfd);
                 }
-                _co_socket_polling_unset(cosockfd);
+                break;
             }
-            break;
+        }
+    } else {
+        if(!_co_time_heap_empty(_co_scheduler->sleepq)) {
+            node = _co_time_heap_top(_co_scheduler->sleepq);
+            now = _co_get_current_time();
+            if(node.timeout > now) {
+                usleep(node.timeout - now);
+            }
         }
     }
 

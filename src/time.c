@@ -2,6 +2,7 @@
 #include <sys/time.h>
 
 #include "time.h"
+#include "sched.h"
 
 _co_time_t _co_get_current_time() {
     struct timeval tv;
@@ -32,6 +33,15 @@ int co_usleep(_co_time_t t) {
         return -1;
     }
 
+    if(_co_current) {
+        _co_current->state = _COROUTINE_STATE_SLEEPING;
+        _co_list_delete(&_co_current->link);
+    }
+    _co_time_heap_insert(_co_scheduler->sleepq, t + now, _co_current);
+
+    // trigger to switch the context
+    _co_switch();
 
     return 0;
+
 }
