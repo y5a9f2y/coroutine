@@ -18,6 +18,7 @@ extern void coroutine_exit(void *);
 extern void coroutine_setdetachstate(co_thread_t *, int);
 extern int coroutine_getdetachstate(co_thread_t *);
 extern int coroutine_join(co_thread_t *, void **);
+extern void coroutine_force_schedule();
 
 extern co_socket_t *co_socket(int, int, int);
 extern int co_bind(co_socket_t *, const struct sockaddr *, socklen_t);
@@ -25,6 +26,7 @@ extern int co_listen(co_socket_t *, int);
 extern int co_close(co_socket_t *);
 extern co_socket_t *co_accept(co_socket_t *, struct sockaddr *, socklen_t *);
 extern int co_socket_get_fd(co_socket_t *);
+extern int co_connect(co_socket_t *, const struct sockaddr *, socklen_t);
 
 extern ssize_t co_read(co_socket_t *, void *, size_t);
 extern ssize_t co_write(co_socket_t *, const void *, size_t);

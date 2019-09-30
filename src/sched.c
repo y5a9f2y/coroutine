@@ -98,7 +98,6 @@ int co_framework_init() {
         !(_co_scheduler->zombieq = _co_list_create()) ||
         !(_co_scheduler->joinq = _co_list_create()) ||
         !(_co_scheduler->stk = _co_stack_create())) {
-        _co_framework_destroy_pool();
         co_framework_destroy();
         return ENOMEM;
     }
@@ -434,6 +433,18 @@ int coroutine_join(_co_thread_t *thread, void **value_ptr) {
     }
 
     return 0;
+
+}
+
+void coroutine_force_schedule() {
+
+    if(_co_current) {
+        _co_current->state = _COROUTINE_STATE_READY;
+        _co_list_insert(_co_scheduler->readyq->prev, &_co_current->link);
+    }
+
+    // trigger to switch the context
+    _co_switch();
 
 }
 

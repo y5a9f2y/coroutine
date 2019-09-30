@@ -240,3 +240,45 @@ ssize_t co_sendto(_co_socket_t *cosockfd, const void *buf, size_t len, int flags
     return -1;
 
 }
+
+int co_connect(_co_socket_t *cosockfd, const struct sockaddr *addr, socklen_t addrlen) {
+
+    int err;
+    int optval;
+    int optlen;
+    cosockfd->co = _co_current;
+
+    while(1) {
+        if((err = connect(cosockfd->fd, addr, addrlen)) < 0) {
+            if(errno == EINTR) {
+                continue;
+            } else if(errno == EINPROGRESS) {
+                _co_socket_flag_set(cosockfd, _COSOCKET_WRITE_INDEX);
+                // trigger to switch the context
+                if(_co_current) {
+                    _co_current->state = _COROUTINE_STATE_IO_WAITING;
+                    _co_list_delete(&_co_current->link);
+                    _co_list_insert(_co_scheduler->iowaitq, &_co_current->link);
+                }
+                _co_switch();
+            } else if(errno == EISCONN) {
+                break;
+            }else {
+                return -1;
+            }
+        } else {
+            break;
+        }
+    }
+    optlen = sizeof(optval);
+    if(getsockopt(cosockfd->fd, SOL_SOCKET, SO_ERROR, (void *)&optval, &optlen) < 0) {
+        return -1;
+    }
+    if(optval) {
+        errno = optval;
+        return -1;
+    }
+
+    return 0;
+
+}
