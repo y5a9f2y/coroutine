@@ -140,6 +140,8 @@ _co_socket_t *co_accept(_co_socket_t *cosockfd, struct sockaddr *addr, socklen_t
                     _co_current->state = _COROUTINE_STATE_IO_WAITING;
                     _co_list_delete(&_co_current->link);
                     _co_list_insert(_co_scheduler->iowaitq, &_co_current->link);
+                } else {
+                    _co_scheduler->state = _COROUTINE_STATE_IO_WAITING;
                 }
                 _co_switch();
             } else if(errno == EINTR) {
@@ -199,6 +201,8 @@ ssize_t co_recvfrom(_co_socket_t *cosockfd, void *buf, size_t len, int flags,
                     _co_current->state = _COROUTINE_STATE_IO_WAITING;
                     _co_list_delete(&_co_current->link);
                     _co_list_insert(_co_scheduler->iowaitq, &_co_current->link);
+                } else {
+                    _co_scheduler->state = _COROUTINE_STATE_IO_WAITING;
                 }
                 _co_switch();
             } else if(errno == EINTR) {
@@ -246,6 +250,8 @@ ssize_t co_sendto(_co_socket_t *cosockfd, const void *buf, size_t len, int flags
                     _co_current->state = _COROUTINE_STATE_IO_WAITING;
                     _co_list_delete(&_co_current->link);
                     _co_list_insert(_co_scheduler->iowaitq, &_co_current->link);
+                } else {
+                    _co_scheduler->state = _COROUTINE_STATE_IO_WAITING;
                 }
                 _co_switch();
             } else if(errno == EINTR) {
@@ -288,6 +294,8 @@ int co_connect(_co_socket_t *cosockfd, const struct sockaddr *addr, socklen_t ad
                     _co_current->state = _COROUTINE_STATE_IO_WAITING;
                     _co_list_delete(&_co_current->link);
                     _co_list_insert(_co_scheduler->iowaitq, &_co_current->link);
+                } else {
+                    _co_scheduler->state = _COROUTINE_STATE_IO_WAITING;
                 }
                 _co_switch();
             } else if(errno == EISCONN) {

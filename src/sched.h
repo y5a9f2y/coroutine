@@ -39,6 +39,8 @@ struct _co_sched {
     _co_list_t      *zombieq;
     // join queue
     _co_list_t      *joinq;
+    // primary state
+    int             state;
 };
 
 struct _co_thread {

@@ -10,6 +10,7 @@
 
 #define _CO_EVENTSYS_SIZE_HINT      (1048576)
 #define _CO_EVENTSYS_BUFFER         (4096)
+#define _CO_EVENTSYS_TIMEOUT        (5)
 
 static int _co_eventsys_fd = 0;
 
@@ -61,7 +62,8 @@ int _co_eventsys_dispatch() {
 
     if(pflag) {
         while(1) {
-            if((nevents = epoll_wait(_co_eventsys_fd, polling, _CO_EVENTSYS_BUFFER, -1)) < 0) {
+            if((nevents = epoll_wait(_co_eventsys_fd, polling,
+                _CO_EVENTSYS_BUFFER, _CO_EVENTSYS_TIMEOUT)) < 0) {
                 switch(errno) {
                     case EINTR:
                         continue;
@@ -76,6 +78,8 @@ int _co_eventsys_dispatch() {
                             cosockfd->rco->state = _COROUTINE_STATE_READY;
                             _co_list_delete(&cosockfd->rco->link);
                             _co_list_insert(_co_scheduler->readyq, &cosockfd->rco->link);
+                        } else {
+                            _co_scheduler->state = _COROUTINE_STATE_RUNNING;
                         }
                         _co_socket_flag_unset(cosockfd, _COSOCKET_READ_INDEX);
                     }
@@ -84,6 +88,8 @@ int _co_eventsys_dispatch() {
                             cosockfd->wco->state = _COROUTINE_STATE_READY;
                             _co_list_delete(&cosockfd->wco->link);
                             _co_list_insert(_co_scheduler->readyq, &cosockfd->wco->link);
+                        } else {
+                            _co_scheduler->state = _COROUTINE_STATE_RUNNING;
                         }
                         _co_socket_flag_unset(cosockfd, _COSOCKET_WRITE_INDEX);
                     }
@@ -96,7 +102,8 @@ int _co_eventsys_dispatch() {
             }
         }
     } else {
-        if(!_co_time_heap_empty(_co_scheduler->sleepq)) {
+        if(!_co_time_heap_empty(_co_scheduler->sleepq) &&
+            _co_scheduler->state != _COROUTINE_STATE_RUNNING) {
             node = _co_time_heap_top(_co_scheduler->sleepq);
             now = _co_get_current_time();
             if(node.timeout > now) {

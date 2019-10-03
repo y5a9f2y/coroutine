@@ -24,6 +24,7 @@ _co_mutex_t *co_mutex_create() {
     _co_list_init(&alloc->wait);
     alloc->owner = NULL;
     alloc->flag = 0;
+    alloc->pflag = 0;
 
     _co_list_insert(_co_scheduler->mutexq, &alloc->link);
     
@@ -51,7 +52,7 @@ static void _co_mutex_recycle(_co_mutex_t *m) {
 int co_mutex_destroy(_co_mutex_t *m) {
 
     if(m) {
-        if(m->flag || !_co_list_empty(&m->wait)) {
+        if(m->flag || !_co_list_empty(&m->wait) || m->pflag) {
             errno = EBUSY;
             return -1;
         }
@@ -87,6 +88,9 @@ int co_mutex_lock(_co_mutex_t *m) {
             _co_current->state = _COROUTINE_STATE_LOCK_WAITING;
             _co_list_delete(&_co_current->link);
             _co_list_insert(&m->wait, &_co_current->link);
+        } else {
+            _co_scheduler->state = _COROUTINE_STATE_LOCK_WAITING;
+            m->pflag = 1;
         }
 
         // trigger to switch the context
@@ -141,6 +145,11 @@ int co_mutex_unlock(_co_mutex_t *m) {
         co = _CO_THREAD_LINK_PTR(next);
         co->state = _COROUTINE_STATE_READY;
         _co_list_insert(_co_scheduler->readyq, &co->link);
+    } else {
+        if(m->pflag) {
+            m->pflag = 0;
+            _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+        }
     }
     m->flag = 0;
     m->owner = NULL;
@@ -163,6 +172,7 @@ _co_cond_t *co_cond_create() {
     }
 
     alloc->flag = 0;
+    alloc->pflag = 0;
     _co_list_init(&alloc->wait);
     _co_list_insert(_co_scheduler->condq, &alloc->link);
 
@@ -190,7 +200,7 @@ static void _co_cond_recycle(_co_cond_t *cond) {
 int co_cond_destroy(_co_cond_t *cond) {
 
     if(cond) {
-        if(cond->flag || !_co_list_empty(&cond->wait)) {
+        if(cond->flag || cond->pflag) {
             errno = EBUSY;
             return -1;
         }
@@ -208,6 +218,9 @@ void co_cond_wait(_co_cond_t *cond) {
         _co_current->state = _COROUTINE_STATE_COND_WAITING;   
         _co_list_delete(&_co_current->link);
         _co_list_insert(&cond->wait, &_co_current->link);
+    } else {
+        cond->pflag = 1;
+        _co_scheduler->state = _COROUTINE_STATE_COND_WAITING;
     }
     // trigger to switch the context
     _co_switch();
@@ -219,17 +232,22 @@ void co_cond_signal(_co_cond_t *cond) {
     _co_list_t *link;
     _co_thread_t *co;
 
-    if(_co_list_empty(&cond->wait)) {
+    if(_co_list_empty(&cond->wait) && !cond->pflag) {
         cond->flag = 0;
         return;
     }
 
-    link = _co_list_delete(cond->wait.prev);
-    co = _CO_THREAD_LINK_PTR(link);
-    co->state = _COROUTINE_STATE_READY;
-    _co_list_insert(_co_scheduler->readyq, &co->link);
+    if(!_co_list_empty(&cond->wait)) {
+        link = _co_list_delete(cond->wait.prev);
+        co = _CO_THREAD_LINK_PTR(link);
+        co->state = _COROUTINE_STATE_READY;
+        _co_list_insert(_co_scheduler->readyq, &co->link);
+    } else {
+        cond->pflag = 0;
+        _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+    }
 
-    if(_co_list_empty(&cond->wait)) {
+    if(_co_list_empty(&cond->wait) && !cond->pflag) {
         cond->flag = 0;
     }
 
@@ -245,6 +263,10 @@ void co_cond_broadcast(_co_cond_t *cond) {
         co = _CO_THREAD_LINK_PTR(link);
         co->state = _COROUTINE_STATE_READY;
         _co_list_insert(_co_scheduler->readyq, &co->link);
+    }
+    if(cond->pflag) {
+        cond->pflag = 0;
+        _co_scheduler->state = _COROUTINE_STATE_RUNNING;
     }
 
     cond->flag = 0;

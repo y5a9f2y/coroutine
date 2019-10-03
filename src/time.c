@@ -36,6 +36,8 @@ int co_usleep(_co_time_t t) {
     if(_co_current) {
         _co_current->state = _COROUTINE_STATE_SLEEPING;
         _co_list_delete(&_co_current->link);
+    } else {
+        _co_scheduler->state = _COROUTINE_STATE_SLEEPING;
     }
     _co_time_heap_insert(_co_scheduler->sleepq, t + now, _co_current);
 

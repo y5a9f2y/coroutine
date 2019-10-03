@@ -102,6 +102,8 @@ int co_framework_init() {
         return ENOMEM;
     }
 
+    _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+
     return 0;
 
 }
@@ -412,6 +414,8 @@ int coroutine_join(_co_thread_t *thread, void **value_ptr) {
                     thread->join = _co_current;
                     _co_current->state = _COROUTINE_STATE_JOIN_WAITING;
                     _co_list_insert(_co_scheduler->joinq, &_co_current->link);
+                } else {
+                    _co_scheduler->state = _COROUTINE_STATE_JOIN_WAITING;
                 }
                 ++thread->join_cnt;
                 
@@ -521,6 +525,8 @@ static void _co_schedule() {
                 if(node.co) {
                     node.co->state = _COROUTINE_STATE_READY;
                     _co_list_insert(_co_scheduler->readyq, &node.co->link);
+                } else {
+                    _co_scheduler->state = _COROUTINE_STATE_RUNNING;
                 }
             } else {
                 break;
@@ -562,6 +568,7 @@ static void _co_schedule() {
     }
     
     _co_current = NULL;
+    _co_scheduler->state = _COROUTINE_STATE_RUNNING;
 
 }
 
