@@ -6,7 +6,8 @@
 
 struct _co_socket {
     int             fd;
-    _co_thread_t    *co;
+    _co_thread_t    *rco;
+    _co_thread_t    *wco;
     _co_list_t      link;
     int             flag;
     int             polling;

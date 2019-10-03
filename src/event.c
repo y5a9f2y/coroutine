@@ -71,12 +71,21 @@ int _co_eventsys_dispatch() {
             } else {
                 for(idx = 0; idx < nevents; ++idx) {
                     cosockfd = (_co_socket_t *)(polling[idx].data.ptr);
-                    _co_socket_flag_unset(cosockfd, _COSOCKET_READ_INDEX);
-                    _co_socket_flag_unset(cosockfd, _COSOCKET_WRITE_INDEX);
-                    if(cosockfd->co) {
-                        cosockfd->co->state = _COROUTINE_STATE_READY;
-                        _co_list_delete(&cosockfd->co->link);
-                        _co_list_insert(_co_scheduler->readyq, &cosockfd->co->link);
+                    if(polling[idx].events | (EPOLLIN | EPOLLHUP | EPOLLRDHUP | EPOLLERR)) {
+                        if(cosockfd->rco) {
+                            cosockfd->rco->state = _COROUTINE_STATE_READY;
+                            _co_list_delete(&cosockfd->rco->link);
+                            _co_list_insert(_co_scheduler->readyq, &cosockfd->rco->link);
+                        }
+                        _co_socket_flag_unset(cosockfd, _COSOCKET_READ_INDEX);
+                    }
+                    if(polling[idx].events | (EPOLLOUT | EPOLLERR)) {
+                        if(cosockfd->wco) {
+                            cosockfd->wco->state = _COROUTINE_STATE_READY;
+                            _co_list_delete(&cosockfd->wco->link);
+                            _co_list_insert(_co_scheduler->readyq, &cosockfd->wco->link);
+                        }
+                        _co_socket_flag_unset(cosockfd, _COSOCKET_WRITE_INDEX);
                     }
                     if(epoll_ctl(_co_eventsys_fd, EPOLL_CTL_DEL, cosockfd->fd, NULL) < 0) {
                         return -1;

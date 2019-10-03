@@ -37,7 +37,8 @@ _co_socket_t *co_socket(int domain, int type, int protocol) {
 
     alloc->fd = fd;
     alloc->flag = 0;
-    alloc->co = _co_current;
+    alloc->rco = NULL;
+    alloc->wco = NULL;
     alloc->polling = 0;
     _co_list_insert(_co_socket_list, &alloc->link);
 
@@ -123,7 +124,12 @@ _co_socket_t *co_accept(_co_socket_t *cosockfd, struct sockaddr *addr, socklen_t
     int fd = 0;
     _co_socket_t *alloc = NULL;
 
-    cosockfd->co = _co_current;
+    if(cosockfd->rco) {
+        errno = EBUSY;
+        return NULL;
+    }
+
+    cosockfd->rco = _co_current;
 
     while(1) {
         if((fd = accept(cosockfd->fd, addr, addrlen)) < 0) {
@@ -139,24 +145,27 @@ _co_socket_t *co_accept(_co_socket_t *cosockfd, struct sockaddr *addr, socklen_t
             } else if(errno == EINTR) {
                 continue;
             } else {
-                return NULL;
+                break;
             }
         } else {
             if(fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
-                return NULL;
+                break;
             }
             if(!(alloc = (_co_socket_t *)malloc(sizeof(_co_socket_t)))) {
                 errno = ENOMEM;
-                return NULL;
+                break;
             }
             alloc->fd = fd;
             alloc->flag = 0;
-            alloc->co = _co_current;
+            alloc->rco = NULL;
+            alloc->wco = NULL;
             _co_list_insert(_co_socket_list, &alloc->link);
+            cosockfd->rco = NULL;
             return alloc;
         }
     }
 
+    cosockfd->rco = NULL;
     return NULL;
 
 }
@@ -174,7 +183,12 @@ ssize_t co_recvfrom(_co_socket_t *cosockfd, void *buf, size_t len, int flags,
 
     ssize_t n;
 
-    cosockfd->co = _co_current;
+    if(cosockfd->rco) {
+        errno = EBUSY;
+        return -1;
+    }
+
+    cosockfd->rco = _co_current;
 
     while(1) {
         if((n = recvfrom(cosockfd->fd, buf, len, flags, addr, addrlen)) < 0) {
@@ -190,13 +204,15 @@ ssize_t co_recvfrom(_co_socket_t *cosockfd, void *buf, size_t len, int flags,
             } else if(errno == EINTR) {
                 continue;
             } else {
-                return -1;
+                break;
             }
         } else {
+            cosockfd->rco = NULL;
             return n;
         }
     }
 
+    cosockfd->rco = NULL;
     return -1;
 
 }
@@ -214,7 +230,12 @@ ssize_t co_sendto(_co_socket_t *cosockfd, const void *buf, size_t len, int flags
 
     ssize_t n;
 
-    cosockfd->co = _co_current;
+    if(cosockfd->wco) {
+        errno = EBUSY;
+        return -1;
+    }
+
+    cosockfd->wco = _co_current;
 
     while(1) {
         if((n = sendto(cosockfd->fd, buf, len, flags, addr, addrlen)) < 0) {
@@ -230,13 +251,15 @@ ssize_t co_sendto(_co_socket_t *cosockfd, const void *buf, size_t len, int flags
             } else if(errno == EINTR) {
                 continue;
             } else {
-                return -1;
+                break;
             }
         } else {
+            cosockfd->wco = NULL;
             return n;
         }
     }
 
+    cosockfd->wco = NULL;
     return -1;
 
 }
@@ -246,7 +269,13 @@ int co_connect(_co_socket_t *cosockfd, const struct sockaddr *addr, socklen_t ad
     int err;
     int optval;
     int optlen;
-    cosockfd->co = _co_current;
+
+    if(cosockfd->wco) {
+        errno = EBUSY;
+        return -1;
+    }
+
+    cosockfd->wco = _co_current;
 
     while(1) {
         if((err = connect(cosockfd->fd, addr, addrlen)) < 0) {
@@ -263,7 +292,8 @@ int co_connect(_co_socket_t *cosockfd, const struct sockaddr *addr, socklen_t ad
                 _co_switch();
             } else if(errno == EISCONN) {
                 break;
-            }else {
+            } else {
+                cosockfd->wco = NULL;
                 return -1;
             }
         } else {
@@ -272,13 +302,16 @@ int co_connect(_co_socket_t *cosockfd, const struct sockaddr *addr, socklen_t ad
     }
     optlen = sizeof(optval);
     if(getsockopt(cosockfd->fd, SOL_SOCKET, SO_ERROR, (void *)&optval, &optlen) < 0) {
+        cosockfd->wco = NULL;
         return -1;
     }
     if(optval) {
         errno = optval;
+        cosockfd->wco = NULL;
         return -1;
     }
 
+    cosockfd->wco = NULL;
     return 0;
 
 }
