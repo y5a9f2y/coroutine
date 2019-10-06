@@ -344,6 +344,8 @@ void coroutine_exit(void *ret) {
             _co_current->join->state = _COROUTINE_STATE_READY;
             _co_list_delete(&_co_current->join->link);
             _co_list_insert(_co_scheduler->readyq, &_co_current->join->link);
+        } else if(_co_current->join_cnt) {
+            _co_scheduler->state = _COROUTINE_STATE_READY;
         }
 
     } else {
@@ -429,6 +431,9 @@ int coroutine_join(_co_thread_t *thread, void **value_ptr) {
                 }
                 _co_list_delete(&thread->link);
                 _coroutine_recycle(thread);
+                if(!_co_current) {
+                    _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+                }
                 return 0;
             case _COROUTINE_STATE_RUNNING:
             default:
@@ -445,6 +450,8 @@ void coroutine_force_schedule() {
     if(_co_current) {
         _co_current->state = _COROUTINE_STATE_READY;
         _co_list_insert(_co_scheduler->readyq->prev, &_co_current->link);
+    } else {
+        _co_scheduler->state = _COROUTINE_STATE_READY;
     }
 
     // trigger to switch the context
@@ -495,8 +502,11 @@ static void _co_schedule_main() {
 
         // signal the coroutine which waits for the current coroutine
         if(_co_current->join) {
+            _co_current->join->state = _COROUTINE_STATE_READY;
             _co_list_delete(&_co_current->join->link);
             _co_list_insert(_co_scheduler->readyq, &_co_current->join->link);
+        } else if(_co_current->join_cnt) {
+            _co_scheduler->state = _COROUTINE_STATE_READY;
         }
 
     } else {
@@ -515,6 +525,10 @@ static void _co_schedule() {
     _co_time_t now;
     _co_time_heap_node_t node;
 
+    if(_co_scheduler->state == _COROUTINE_STATE_READY) {
+        _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+    }
+
     while(1) {
 
         while(!_co_time_heap_empty(_co_scheduler->sleepq)) {
@@ -526,6 +540,7 @@ static void _co_schedule() {
                     node.co->state = _COROUTINE_STATE_READY;
                     _co_list_insert(_co_scheduler->readyq, &node.co->link);
                 } else {
+                    // after the loop, the state of the primary coroutine is running
                     _co_scheduler->state = _COROUTINE_STATE_RUNNING;
                 }
             } else {
@@ -554,8 +569,14 @@ static void _co_schedule() {
                         (const void *)(_co_current->stk->end - _co_current->stk->size),
                         (size_t)(_co_current->stk->size));
             }
+            if(_co_scheduler->state == _COROUTINE_STATE_RUNNING) {
+                _co_scheduler->state = _COROUTINE_STATE_READY;
+            }
             _co_current->state = _COROUTINE_STATE_RUNNING;
             swapcontext(&_co_scheduler->ctx, &_co_current->ctx);
+            if(_co_scheduler->state == _COROUTINE_STATE_READY) {
+                _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+            }
 
         }
 
@@ -568,7 +589,10 @@ static void _co_schedule() {
     }
     
     _co_current = NULL;
-    _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+
+    if(_co_scheduler->state == _COROUTINE_STATE_READY) {
+        _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+    }
 
 }
 

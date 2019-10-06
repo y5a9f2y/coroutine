@@ -79,7 +79,7 @@ int _co_eventsys_dispatch() {
                             _co_list_delete(&cosockfd->rco->link);
                             _co_list_insert(_co_scheduler->readyq, &cosockfd->rco->link);
                         } else {
-                            _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+                            _co_scheduler->state = _COROUTINE_STATE_READY;
                         }
                         _co_socket_flag_unset(cosockfd, _COSOCKET_READ_INDEX);
                     }
@@ -89,7 +89,7 @@ int _co_eventsys_dispatch() {
                             _co_list_delete(&cosockfd->wco->link);
                             _co_list_insert(_co_scheduler->readyq, &cosockfd->wco->link);
                         } else {
-                            _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+                            _co_scheduler->state = _COROUTINE_STATE_READY;
                         }
                         _co_socket_flag_unset(cosockfd, _COSOCKET_WRITE_INDEX);
                     }
@@ -103,6 +103,7 @@ int _co_eventsys_dispatch() {
         }
     } else {
         if(!_co_time_heap_empty(_co_scheduler->sleepq) &&
+            _co_scheduler->state != _COROUTINE_STATE_READY && 
             _co_scheduler->state != _COROUTINE_STATE_RUNNING) {
             node = _co_time_heap_top(_co_scheduler->sleepq);
             now = _co_get_current_time();

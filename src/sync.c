@@ -148,7 +148,7 @@ int co_mutex_unlock(_co_mutex_t *m) {
     } else {
         if(m->pflag) {
             m->pflag = 0;
-            _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+            _co_scheduler->state = _COROUTINE_STATE_READY;
         }
     }
     m->flag = 0;
@@ -244,7 +244,7 @@ void co_cond_signal(_co_cond_t *cond) {
         _co_list_insert(_co_scheduler->readyq, &co->link);
     } else {
         cond->pflag = 0;
-        _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+        _co_scheduler->state = _COROUTINE_STATE_READY;
     }
 
     if(_co_list_empty(&cond->wait) && !cond->pflag) {
@@ -266,7 +266,7 @@ void co_cond_broadcast(_co_cond_t *cond) {
     }
     if(cond->pflag) {
         cond->pflag = 0;
-        _co_scheduler->state = _COROUTINE_STATE_RUNNING;
+        _co_scheduler->state = _COROUTINE_STATE_READY;
     }
 
     cond->flag = 0;
