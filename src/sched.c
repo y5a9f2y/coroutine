@@ -349,6 +349,7 @@ void coroutine_exit(void *ret) {
         }
 
     } else {
+        _co_current->state = _COROUTINE_STATE_DONE;
         _coroutine_recycle(_co_current);
     }
 
@@ -436,6 +437,7 @@ int coroutine_join(_co_thread_t *thread, void **value_ptr) {
                 }
                 return 0;
             case _COROUTINE_STATE_RUNNING:
+            case _COROUTINE_STATE_DONE:
             default:
                 return EINVAL;
         }
@@ -481,7 +483,9 @@ void _co_switch() {
     if(_co_current) {
         // if the current coroutine is not the primary coroutine then save the context here
         // at the very first time, the _co_current is also NULL, so the switch is safe
-        _co_switch_save_stack();
+        if(_co_current->state != _COROUTINE_STATE_DONE) {
+            _co_switch_save_stack();
+        }
         swapcontext(&_co_current->ctx, &_co_scheduler->ctx);
     } else {
         // if the current coroutine is the primary coroutine, then just do the schedule process
@@ -510,6 +514,7 @@ static void _co_schedule_main() {
         }
 
     } else {
+        _co_current->state = _COROUTINE_STATE_DONE;
         _coroutine_recycle(_co_current);
     }
 

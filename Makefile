@@ -8,7 +8,7 @@ default:
 release: default
 	@mkdir -p output/coroutine/lib
 	@cp build/include/coroutine.h output/coroutine
-	@cp -R build/lib/libcoroutine.a output/coroutine/lib
+	@cp build/lib/libcoroutine.a output/coroutine/lib
 
 test:
 	@mkdir -p third/googletest/build
@@ -27,3 +27,11 @@ clean:
 	@cd third/googletest && if [ -d "build" ]; then rm -rf build; fi
 	@cd utest && if [ -d "build" ]; then rm -rf build; fi
 
+uninstall:
+	@cd /usr/local/include && if [ -d "coroutine" ]; then rm -rf coroutine; fi
+	@cd /usr/local/lib && if [ -f "libcoroutine.a" ]; then rm libcoroutine.a; fi
+
+install:
+	@mkdir -p /usr/local/include/coroutine
+	@cp build/include/coroutine.h /usr/local/include/coroutine
+	@cp build/lib/libcoroutine.a /usr/local/lib/libcoroutine.a
