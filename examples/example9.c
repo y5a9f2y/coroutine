@@ -143,7 +143,7 @@ int main(int argc, char *argv) {
     }
 
     while(1) {
-        if(!(conn = co_accept(listen_fd, (struct sockaddr *)&conn_addr, &conn_addrlen)) < 0) {
+        if(!(conn = co_accept(listen_fd, (struct sockaddr *)&conn_addr, &conn_addrlen))) {
             fprintf(stderr, "accept a new connection error: %s\n", strerror(errno));
             continue;
         } else {

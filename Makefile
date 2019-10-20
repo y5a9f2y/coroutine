@@ -11,6 +11,7 @@ release: default
 	@cp build/lib/libcoroutine.a output/coroutine/lib
 
 test:
+	@cd third && tar xzf googletest.tar.gz
 	@mkdir -p third/googletest/build
 	@cd third/googletest/build && cmake .. && make
 	@mkdir -p utest/build/include
@@ -24,7 +25,7 @@ test:
 clean:
 	@if [ -d "build" ]; then rm -rf build; fi
 	@if [ -d "output" ]; then rm -rf output; fi
-	@cd third/googletest && if [ -d "build" ]; then rm -rf build; fi
+	@cd third && if [ -d "googletest" ]; then rm -rf googletest; fi
 	@cd utest && if [ -d "build" ]; then rm -rf build; fi
 
 uninstall:
