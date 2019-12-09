@@ -16,12 +16,15 @@ struct _co_socket {
 #define _COSOCKET_READ_INDEX     (0x0)
 #define _COSOCKET_WRITE_INDEX    (0x1)
 
+#define _COSOCKET_READ_POLLING_INDEX    (0x0)
+#define _COSOCKET_WRITE_POLLING_INDEX   (0x1)
+
 void _co_socket_flag_set(_co_socket_t *, int);
 int _co_socket_flag_get(_co_socket_t *, int);
 void _co_socket_flag_unset(_co_socket_t *, int);
 
-void _co_socket_polling_set(_co_socket_t *);
-void _co_socket_polling_unset(_co_socket_t *);
-int _co_socket_polling_get(_co_socket_t *);
+void _co_socket_polling_set(_co_socket_t *, int);
+void _co_socket_polling_unset(_co_socket_t *, int);
+int _co_socket_polling_get(_co_socket_t *, int);
 
 #endif

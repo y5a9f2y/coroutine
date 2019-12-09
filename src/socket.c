@@ -11,6 +11,7 @@
 
 static void _co_socket_recyle(_co_socket_t *);
 static int _co_socket_flag_verify(int);
+static int _co_socket_polling_verify(int);
 
 _co_socket_t *co_socket(int domain, int type, int protocol) {
 
@@ -78,22 +79,39 @@ void _co_socket_flag_unset(_co_socket_t *cosockfd, int flag) {
     }
 }
 
-int _co_socket_polling_get(_co_socket_t *cosockfd) {
-    return cosockfd->polling;
+void _co_socket_polling_set(_co_socket_t *cosockfd, int flag) {
+    if(_co_socket_polling_verify(flag)) {
+        cosockfd->polling |= (1 << flag);
+    }
 }
 
-void _co_socket_polling_set(_co_socket_t *cosockfd) {
-    cosockfd->polling = 1;
+int _co_socket_polling_get(_co_socket_t *cosockfd, int flag) {
+    if(_co_socket_polling_verify(flag)) {
+        return cosockfd->polling & (1 << flag);
+    }
+    return 0;
 }
 
-void _co_socket_polling_unset(_co_socket_t *cosockfd) {
-    cosockfd->polling = 0;
+void _co_socket_polling_unset(_co_socket_t *cosockfd, int flag) {
+    if(_co_socket_polling_verify(flag)) {
+        cosockfd->polling &= (~(1 << flag));
+    }
 }
 
 static int _co_socket_flag_verify(int flag) {
     switch(flag) {
         case _COSOCKET_READ_INDEX:
         case _COSOCKET_WRITE_INDEX:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+static int _co_socket_polling_verify(int flag) {
+    switch(flag) {
+        case _COSOCKET_READ_POLLING_INDEX:
+        case _COSOCKET_WRITE_POLLING_INDEX:
             return 1;
         default:
             return 0;

@@ -41,11 +41,24 @@ TEST(SocketTest, Property) {
 
     co_socket_t *fd = co_socket(AF_INET, SOCK_STREAM, 0);
 
-    ASSERT_FALSE(_co_socket_polling_get(fd));
-    _co_socket_polling_set(fd);
-    ASSERT_TRUE(_co_socket_polling_get(fd));
-    _co_socket_polling_unset(fd);
-    ASSERT_FALSE(_co_socket_polling_get(fd));
+    ASSERT_FALSE(_co_socket_polling_get(fd, _COSOCKET_READ_POLLING_INDEX));
+    ASSERT_FALSE(_co_socket_polling_get(fd, _COSOCKET_WRITE_POLLING_INDEX));
+
+    _co_socket_polling_set(fd, _COSOCKET_READ_POLLING_INDEX);
+    ASSERT_TRUE(_co_socket_polling_get(fd, _COSOCKET_READ_POLLING_INDEX));
+    ASSERT_FALSE(_co_socket_polling_get(fd, _COSOCKET_WRITE_POLLING_INDEX));
+
+    _co_socket_polling_set(fd, _COSOCKET_WRITE_POLLING_INDEX);
+    ASSERT_TRUE(_co_socket_polling_get(fd, _COSOCKET_READ_POLLING_INDEX));
+    ASSERT_TRUE(_co_socket_polling_get(fd, _COSOCKET_WRITE_POLLING_INDEX));
+
+    _co_socket_polling_unset(fd, _COSOCKET_READ_POLLING_INDEX);
+    ASSERT_FALSE(_co_socket_polling_get(fd, _COSOCKET_READ_POLLING_INDEX));
+    ASSERT_TRUE(_co_socket_polling_get(fd, _COSOCKET_WRITE_POLLING_INDEX));
+
+    _co_socket_polling_unset(fd, _COSOCKET_WRITE_POLLING_INDEX);
+    ASSERT_FALSE(_co_socket_polling_get(fd, _COSOCKET_READ_POLLING_INDEX));
+    ASSERT_FALSE(_co_socket_polling_get(fd, _COSOCKET_WRITE_POLLING_INDEX));
 
     ASSERT_FALSE(_co_socket_flag_get(fd, _COSOCKET_READ_INDEX));
     _co_socket_flag_set(fd, _COSOCKET_READ_INDEX);
