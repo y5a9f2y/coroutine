@@ -177,6 +177,7 @@ _co_socket_t *co_accept(_co_socket_t *cosockfd, struct sockaddr *addr, socklen_t
             }
             alloc->fd = fd;
             alloc->flag = 0;
+            alloc->polling = 0;
             alloc->rco = NULL;
             alloc->wco = NULL;
             _co_list_insert(_co_socket_list, &alloc->link);
