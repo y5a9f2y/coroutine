@@ -4,7 +4,7 @@
 #include "time.h"
 #include "sched.h"
 
-_co_time_t _co_get_current_time() {
+_co_time_t co_get_current_time() {
     struct timeval tv;
     if(gettimeofday(&tv, NULL) < 0) {
         return -1;
@@ -24,7 +24,7 @@ int co_usleep(_co_time_t t) {
     }
 
     _co_time_t now;
-    if((now = _co_get_current_time()) < 0) {
+    if((now = co_get_current_time()) < 0) {
         return -1;
     }
 

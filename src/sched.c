@@ -537,7 +537,7 @@ static void _co_schedule() {
     while(1) {
 
         while(!_co_time_heap_empty(_co_scheduler->sleepq)) {
-            now = _co_get_current_time();
+            now = co_get_current_time();
             node = _co_time_heap_top(_co_scheduler->sleepq);
             if(now >= node.timeout) {
                 _co_time_heap_delete(_co_scheduler->sleepq, _co_scheduler->sleepq->heap);

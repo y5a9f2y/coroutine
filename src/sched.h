@@ -19,7 +19,7 @@
 
 #define _COROUTINE_FLAG_JOINABLE_IDX    (0x0)
 
-#define _DEFAULT_STACK_SIZE         (1048576)
+#define _DEFAULT_STACK_SIZE         (8388608)
 
 struct _co_sched {
     // the context of the scheduler

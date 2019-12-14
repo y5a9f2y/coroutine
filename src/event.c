@@ -185,7 +185,7 @@ int _co_eventsys_dispatch() {
             _co_scheduler->state != _COROUTINE_STATE_READY && 
             _co_scheduler->state != _COROUTINE_STATE_RUNNING) {
             node = _co_time_heap_top(_co_scheduler->sleepq);
-            now = _co_get_current_time();
+            now = co_get_current_time();
             if(node.timeout > now) {
                 usleep(node.timeout - now);
             }

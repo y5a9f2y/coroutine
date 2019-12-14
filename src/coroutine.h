@@ -48,6 +48,7 @@ extern void co_cond_wait(co_cond_t *);
 extern void co_cond_signal(co_cond_t *);
 extern void co_cond_broadcast(co_cond_t *);
 
+extern co_time_t co_get_current_time();
 extern int co_usleep(co_time_t);
 
 #define COROUTINE_FLAG_JOINABLE        (0x0)

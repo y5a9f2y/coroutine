@@ -8,8 +8,8 @@ extern "C" {
 }
 
 TEST(TimeTest, Get) {
-    _co_time_t t1 = _co_get_current_time();
-    _co_time_t t2 = _co_get_current_time();
+    _co_time_t t1 = co_get_current_time();
+    _co_time_t t2 = co_get_current_time();
     ASSERT_TRUE(t2 >= t1);
 }
 
